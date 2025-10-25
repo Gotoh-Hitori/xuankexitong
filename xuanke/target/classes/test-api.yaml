@@ -1,0 +1,334 @@
+openapi: 3.0.3
+info:
+  title: Xuanke Course Management API
+  description: |
+    内存选课系统 RESTful API
+
+    **主要功能**：
+    - 课程管理：查询、创建、更新、删除课程
+    - 学生管理：查询、创建、更新、删除学生
+    - 选课管理：学生选课、退课、查询选课记录
+
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@zjsu.edu.cn
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+
+tags:
+  - name: Courses
+    description: 课程管理相关接口
+  - name: Students
+    description: 学生管理相关接口
+  - name: Enrollments
+    description: 选课管理相关接口
+
+paths:
+  /api/courses:
+    get:
+      tags:
+        - Courses
+      summary: 获取所有课程
+      operationId: getAllCourses
+      responses:
+        '200':
+          description: 成功获取课程列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseListResponse'
+    post:
+      tags:
+        - Courses
+      summary: 创建课程
+      operationId: createCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseInput'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseResponse'
+
+  /api/courses/{id}:
+    get:
+      tags:
+        - Courses
+      summary: 根据ID获取课程
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功获取课程
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseResponse'
+        '404':
+          description: 课程不存在
+    put:
+      tags:
+        - Courses
+      summary: 更新课程信息
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseInput'
+      responses:
+        '200':
+          description: 更新成功
+        '404':
+          description: 课程不存在
+    delete:
+      tags:
+        - Courses
+      summary: 删除课程
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+        '404':
+          description: 课程不存在
+
+  /api/students:
+    get:
+      tags:
+        - Students
+      summary: 获取所有学生
+      operationId: getAllStudents
+      responses:
+        '200':
+          description: 成功获取学生列表
+    post:
+      tags:
+        - Students
+      summary: 创建学生
+      operationId: createStudent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentInput'
+      responses:
+        '201':
+          description: 创建成功
+
+  /api/students/{id}:
+    get:
+      tags:
+        - Students
+      summary: 根据ID获取学生
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功获取学生
+        '404':
+          description: 学生不存在
+    put:
+      tags:
+        - Students
+      summary: 更新学生信息
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentInput'
+      responses:
+        '200':
+          description: 更新成功
+        '404':
+          description: 学生不存在
+    delete:
+      tags:
+        - Students
+      summary: 删除学生
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+        '400':
+          description: 无法删除，存在选课记录
+        '404':
+          description: 学生不存在
+
+  /api/enrollments:
+    get:
+      tags:
+        - Enrollments
+      summary: 查询所有选课记录
+      responses:
+        '200':
+          description: 成功
+    post:
+      tags:
+        - Enrollments
+      summary: 学生选课
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentInput'
+      responses:
+        '201':
+          description: 选课成功
+        '400':
+          description: 重复选课或容量已满
+        '404':
+          description: 学生或课程不存在
+
+  /api/enrollments/{id}:
+    delete:
+      tags:
+        - Enrollments
+      summary: 学生退课
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 退课成功
+        '404':
+          description: 选课记录不存在
+
+  /api/enrollments/course/{courseId}:
+    get:
+      tags:
+        - Enrollments
+      summary: 按课程查询选课记录
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 查询成功
+
+  /api/enrollments/student/{studentId}:
+    get:
+      tags:
+        - Enrollments
+      summary: 按学生查询选课记录
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 查询成功
+
+components:
+  schemas:
+    CourseInput:
+      type: object
+      properties:
+        code:
+          type: string
+        title:
+          type: string
+        instructor:
+          $ref: '#/components/schemas/Instructor'
+        schedule:
+          $ref: '#/components/schemas/ScheduleSlot'
+        capacity:
+          type: integer
+    CourseResponse:
+      allOf:
+        - $ref: '#/components/schemas/CourseInput'
+        - type: object
+          properties:
+            id:
+              type: string
+            enrolled:
+              type: integer
+    StudentInput:
+      type: object
+      properties:
+        studentId:
+          type: string
+        name:
+          type: string
+        major:
+          type: string
+        grade:
+          type: integer
+        email:
+          type: string
+    EnrollmentInput:
+      type: object
+      properties:
+        courseId:
+          type: string
+        studentId:
+          type: string
+    Instructor:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+    ScheduleSlot:
+      type: object
+      properties:
+        dayOfWeek:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        expectedAttendance:
+          type: integer
