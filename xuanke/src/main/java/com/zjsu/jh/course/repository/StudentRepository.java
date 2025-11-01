@@ -1,42 +1,29 @@
 package com.zjsu.jh.course.repository;
 
 import com.zjsu.jh.course.model.Student;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
+import java.util.Optional;
 
 @Repository
-public class StudentRepository {
-    private final Map<String, Student> studentMap = new ConcurrentHashMap<>();
-
-    public Student save(Student student) {
-        if (student.getId() == null) {
-            student.setId(UUID.randomUUID().toString());
-        }
-        studentMap.put(student.getId(), student);
-        return student;
-    }
-
-    public Optional<Student> findById(String id) {
-        return Optional.ofNullable(studentMap.get(id));
-    }
-
-    public Optional<Student> findByStudentId(String studentId) {
-        return studentMap.values().stream()
-                .filter(s -> s.getStudentId().equalsIgnoreCase(studentId))
-                .findFirst();
-    }
-
-    public List<Student> findAll() {
-        return new ArrayList<>(studentMap.values());
-    }
-
-    public void deleteById(String id) {
-        studentMap.remove(id);
-    }
-
-    public void clear() {
-        studentMap.clear();
-    }
+public interface StudentRepository extends JpaRepository<Student, String> {
+    
+    // 按学号查询
+    Optional<Student> findByStudentId(String studentId);
+    
+    // 按邮箱查询
+    Optional<Student> findByEmail(String email);
+    
+    // 判重检查
+    boolean existsByStudentId(String studentId);
+    
+    boolean existsByEmail(String email);
+    
+    // 按专业筛选
+    List<Student> findByMajor(String major);
+    
+    // 按年级筛选
+    List<Student> findByGrade(Integer grade);
 }

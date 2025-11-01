@@ -1,53 +1,39 @@
 package com.zjsu.jh.course.repository;
 
 import com.zjsu.jh.course.model.Enrollment;
+import com.zjsu.jh.course.model.EnrollmentStatus;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Optional;
 
 @Repository
-public class EnrollmentRepository {
-    private final Map<String, Enrollment> enrollmentMap = new ConcurrentHashMap<>();
-
-    public Enrollment save(Enrollment enrollment) {
-        if (enrollment.getId() == null) {
-            enrollment.setId(UUID.randomUUID().toString());
-        }
-        enrollmentMap.put(enrollment.getId(), enrollment);
-        return enrollment;
-    }
-
-    // ✅ 新增 findById 方法
-    public Optional<Enrollment> findById(String id) {
-        return Optional.ofNullable(enrollmentMap.get(id));
-    }
-
-    // ✅ 修改 deleteById → delete，以匹配 service 调用
-    public void delete(String id) {
-        enrollmentMap.remove(id);
-    }
-
-    public Optional<Enrollment> findByCourseIdAndStudentId(String courseId, String studentId) {
-        return enrollmentMap.values().stream()
-                .filter(e -> e.getCourseId().equals(courseId) && e.getStudentId().equals(studentId))
-                .findFirst();
-    }
-
-    public List<Enrollment> findByCourseId(String courseId) {
-        return enrollmentMap.values().stream()
-                .filter(e -> e.getCourseId().equals(courseId))
-                .collect(Collectors.toList());
-    }
-
-    public List<Enrollment> findByStudentId(String studentId) {
-        return enrollmentMap.values().stream()
-                .filter(e -> e.getStudentId().equals(studentId))
-                .collect(Collectors.toList());
-    }
-
-    public List<Enrollment> findAll() {
-        return new ArrayList<>(enrollmentMap.values());
-    }
+public interface EnrollmentRepository extends JpaRepository<Enrollment, String> {
+    
+    // 按课程、学生组合查询
+    Optional<Enrollment> findByCourseIdAndStudentId(String courseId, String studentId);
+    
+    // 按课程、学生、状态组合查询
+    Optional<Enrollment> findByCourseIdAndStudentIdAndStatus(String courseId, String studentId, EnrollmentStatus status);
+    
+    // 按课程查询
+    List<Enrollment> findByCourseId(String courseId);
+    
+    // 按学生查询
+    List<Enrollment> findByStudentId(String studentId);
+    
+    // 按课程和状态查询
+    List<Enrollment> findByCourseIdAndStatus(String courseId, EnrollmentStatus status);
+    
+    // 按学生和状态查询
+    List<Enrollment> findByStudentIdAndStatus(String studentId, EnrollmentStatus status);
+    
+    // 统计课程活跃人数
+    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.courseId = ?1 AND e.status = 'ACTIVE'")
+    long countActiveEnrollmentsByCourseId(String courseId);
+    
+    // 判断学生是否已选课
+    boolean existsByStudentIdAndCourseIdAndStatus(String studentId, String courseId, EnrollmentStatus status);
 }

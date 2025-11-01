@@ -1,5 +1,8 @@
 package com.zjsu.jh.course.model;
 
+import jakarta.persistence.Embeddable;
+
+@Embeddable
 public class ScheduleSlot {
     private String dayOfWeek;        // MONDAY / TUESDAY / ...
     private String startTime;        // "08:00"

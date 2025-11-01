@@ -1,31 +1,50 @@
 package com.zjsu.jh.course.model;
 
+import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 
+@Entity
+@Table(name = "students", uniqueConstraints = {
+    @UniqueConstraint(columnNames = "studentId"),
+    @UniqueConstraint(columnNames = "email")
+})
 public class Student {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id; // 系统生成 UUID
 
     @NotBlank(message = "学号不能为空")
+    @Column(name = "student_id", unique = true, nullable = false)
     private String studentId;
 
     @NotBlank(message = "姓名不能为空")
+    @Column(nullable = false)
     private String name;
 
     @NotBlank(message = "专业不能为空")
+    @Column(nullable = false)
     private String major;
 
     @NotNull(message = "入学年份不能为空")
+    @Column(nullable = false)
     private Integer grade;
 
     @Email(message = "邮箱格式不正确")
     @NotBlank(message = "邮箱不能为空")
+    @Column(unique = true, nullable = false)
     private String email;
 
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt; // 系统自动生成
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+    }
 
     // Getters & Setters
     public String getId() { return id; }
