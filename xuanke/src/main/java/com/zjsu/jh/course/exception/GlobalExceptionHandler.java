@@ -12,16 +12,6 @@ import java.util.Map;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 处理业务异常
-    @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<?> handleBusinessException(BusinessException ex) {
-        Map<String, Object> res = new HashMap<>();
-        res.put("code", 409); // 使用409 Conflict状态码表示业务冲突
-        res.put("message", ex.getMessage());
-        res.put("data", null);
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(res);
-    }
-
     // 处理普通业务异常
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<?> handleRuntimeException(RuntimeException ex) {

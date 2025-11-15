@@ -1,8 +1,5 @@
 package com.zjsu.jh.course.model;
 
-import jakarta.persistence.Embeddable;
-
-@Embeddable
 public class Instructor {
     private String id;
     private String name;
