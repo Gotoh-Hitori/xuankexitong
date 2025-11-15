@@ -1,431 +1,173 @@
 # 选课管理系统
 
-本项目是一个基于 **Spring Boot 3 + Java 17** 实现的选课系统示例，  
-展示了课程、学生、选课的完整 RESTful API 设设计与实现。  
-系统支持多种数据库环境（H2内存数据库用于开发，MySQL用于生产环境）。
+基于 **Spring Boot 3.4 + Java 17** 构建的轻量级课程-学生-选课管理 API。系统以 `ConcurrentHashMap` 作为内存数据存储，开箱即用；提供课程容量控制、选课幂等校验、统一异常处理以及 Docker 化部署示例，适合作为课堂/面试示例或二次开发模板。
+
+> 项目启动后会在 `@PostConstruct` 中预置两门课程与两名学生，可直接调用接口体验。
 
 ---
 
-## 一、项目结构
+## 1. 技术栈与特性
+
+- Spring Boot Web & Validation：暴露 RESTful API，并提供 `@Valid` 参数校验。
+- 分层设计：Controller / Service / Repository / Model / Exception。
+- 并发安全：仓储层使用 `ConcurrentHashMap`，并通过服务层封装业务逻辑。
+- 统一响应：所有接口返回 `code`、`message`、`data` 结构，便于前端消费。
+- 全局异常处理：`GlobalExceptionHandler` 对业务、校验、系统异常做集中拦截。
+- 容器化：提供 `Dockerfile` 与 `docker-compose.yml`，可一键构建运行环境。
+
+---
+
+## 2. 项目结构
 
 ```
 xuanke/
- ├── src/
- │   ├── main/java/com/zjsu/jh/course/
- │   │   ├── controller/      # 控制层（EnrollmentController、CourseController、StudentController等）
- │   │   ├── service/         # 服务层（EnrollmentService、CourseService、StudentService）
- │   │   ├── model/           # 实体类（Course、Student、Enrollment等）
- │   │   ├── repository/      # 数据访问层（JPA Repository接口）
- │   │   ├── exception/       # 自定义异常类和全局异常处理
- │   └── resources/
- │       ├── db/              # 数据库初始化脚本
- │       ├── application.yml  # Spring Boot 主配置文件
- │       ├── application-dev.yml  # 开发环境配置
- │       └── application-prod.yml # 生产环境配置
- ├── pom.xml                  # Maven 依赖配置
- └── README.md                # 项目说明
+├── src/main/java/com/zjsu/jh/course
+│   ├── controller/        # CourseController / StudentController / EnrollmentController
+│   ├── service/           # 业务逻辑、容量校验、幂等校验
+│   ├── repository/        # 基于 ConcurrentHashMap 的内存仓储
+│   ├── model/             # Course / Student / Enrollment / Instructor / ScheduleSlot
+│   └── exception/         # ResourceNotFoundException + GlobalExceptionHandler
+├── src/main/resources/
+│   ├── application.properties  # 默认 profile
+│   ├── application-*.yml       # 预留 dev / prod / docker 配置
+│   └── test-api.yaml           # OpenAPI 3.0 描述文件
+├── api-test.md                 # Postman / HTTPie 调试脚本
+├── docker-compose.yml          # App + MySQL 示例编排
+├── Dockerfile                  # 多阶段构建镜像
+└── pom.xml
 ```
 
 ---
 
-## 二、运行说明
+## 3. 核心数据模型
 
-### 环境要求
+| 模型           | 关键字段                                                     | 说明                                                         |
+| -------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| `Course`       | `code`、`title`、`Instructor`、`ScheduleSlot`、`capacity`、`enrolled` | 支持容量控制、自动生成 `id`，在选课/退课时维护 `enrolled` 计数。 |
+| `Student`      | `studentId`、`name`、`major`、`grade`、`email`               | 启用 `@Email`、`@NotBlank` 校验，并记录 `createdAt`。        |
+| `Enrollment`   | `courseId`、`studentId`                                      | 使用 UUID 作为主键，防止重复选课。                           |
+| `Instructor`   | `id`、`name`、`email`                                        | 任课教师信息，挂载在课程上。                                 |
+| `ScheduleSlot` | `dayOfWeek`、`startTime`、`endTime`、`expectedAttendance`    | 描述排课时段与预期到课人数。                                 |
 
-- JDK 17+  
-- Maven 3.8+  
-- IntelliJ IDEA 或其他 IDE
-- （可选）MySQL 8.0+（用于生产环境）
+---
 
-### 环境切换
+## 4. 运行方式
 
-系统支持两种运行环境：
+### 4.1 环境要求
 
-1. **开发环境**（默认）：使用H2内存数据库
-2. **生产环境**：使用MySQL数据库
+- JDK 17+
+- Maven 3.8+
+- （可选）Docker 24+、Docker Compose
 
-切换方式：
+### 4.2 本地运行
 
 ```bash
-# 使用开发环境（默认）
+# 安装依赖并启动（热加载）
 mvn spring-boot:run
 
-# 使用生产环境
-mvn spring-boot:run -Dspring.profiles.active=prod
-```
-
-### 构建与运行
-
-```bash
-# 编译项目
+# 或先构建再运行
 mvn clean package
-
-# 运行项目（开发环境）
-mvn spring-boot:run
-
-# 运行项目（生产环境）
-mvn spring-boot:run -Dspring.profiles.active=prod
+java -jar target/course-1.0.0.jar
 ```
 
-### 访问地址
+- 默认端口：`http://localhost:8080`
+- 默认 profile 为 `application.properties`，无需数据库即可运行。
 
-服务启动后可访问：  
-📍 http://localhost:8080/
-
-H2控制台（仅开发环境）：  
-📍 http://localhost:8080/h2-console
-
----
-
-## 三、数据库配置
-
-### 开发环境（H2数据库）
-
-- 自动创建内存数据库
-- 自动执行初始化脚本（schema.sql和data.sql）
-- 启用H2控制台，便于调试
-- 启用SQL日志显示
-
-### 生产环境（MySQL数据库）
-
-- 需要手动创建数据库
-- 使用HikariCP连接池
-- 关闭SQL日志显示
-- 需要手动执行初始化脚本
-
-### 数据库健康检查
-
-系统提供数据库连接健康检查接口：
+### 4.3 Docker 镜像
 
 ```bash
-curl http://localhost:8080/health/db
+# 构建
+docker build -t coursehub:latest .
+
+# 运行
+docker run --rm -p 8080:8080 coursehub:latest
+```
+
+### 4.4 Docker Compose
+
+`docker-compose.yml` 提供 App + MySQL 的示例编排（预设 `SPRING_PROFILES_ACTIVE=docker`）。目前应用仍以内存仓储为主，因此 MySQL 配置可视为后续扩展示例。
+
+```bash
+docker compose up -d --build
 ```
 
 ---
 
-## 📚 四、API 接口详细说明
-
-### 课程管理模块
-
-#### 1. 获取所有课程
-
-- **URL**: `GET /api/courses`
-
-- **功能**: 获取系统中所有课程信息
-
-- **请求示例**:
-
-  ```bash
-  curl -X GET http://localhost:8080/api/courses
-  ```
-
-- **响应示例**:
-
-  ```json
-  {
-    "code": 200,
-    "message": "Success",
-    "data": [
-      {
-        "id": "1",
-        "code": "CS101",
-        "title": "计算机科学导论",
-        "instructor": {
-          "id": "T001",
-          "name": "张教授",
-          "email": "zhang@example.edu.cn"
-        },
-        "schedule": {
-          "dayOfWeek": "MONDAY",
-          "startTime": "08:00",
-          "endTime": "10:00",
-          "expectedAttendance": 50
-        },
-        "capacity": 60,
-        "enrolled": 0
-      }
-    ]
-  }
-  ```
-
-#### 2. 获取单个课程
-
-- **URL**: `GET /api/courses/{id}`
-
-- **功能**: 根据课程ID获取特定课程信息
-
-- **请求示例**:
-
-  ```bash
-  curl -X GET http://localhost:8080/api/courses/1
-  ```
-
-#### 3. 创建课程
-
-- **URL**: `POST /api/courses`
-
-- **功能**: 添加新课程到系统中
-
-- **请求示例**:
-
-  ```bash
-  curl -X POST http://localhost:8080/api/courses \
-    -H "Content-Type: application/json" \
-    -d '{
-      "code": "CS102",
-      "title": "数据结构",
-      "instructor": {
-        "id": "T002",
-        "name": "李教授",
-        "email": "li@example.edu.cn"
-      },
-      "schedule": {
-        "dayOfWeek": "TUESDAY",
-        "startTime": "10:00",
-        "endTime": "12:00",
-        "expectedAttendance": 50
-      },
-      "capacity": 50
-    }'
-  ```
-
-#### 4. 更新课程
-
-- **URL**: `PUT /api/courses/{id}`
-
-- **功能**: 更新指定课程的信息
-
-- **请求示例**:
-
-  ```bash
-  curl -X PUT http://localhost:8080/api/courses/1 \
-    -H "Content-Type: application/json" \
-    -d '{
-      "code": "CS101",
-      "title": "计算机科学导论（进阶）",
-      "instructor": {
-        "id": "T001",
-        "name": "张教授",
-        "email": "zhang@example.edu.cn"
-      },
-      "schedule": {
-        "dayOfWeek": "MONDAY",
-        "startTime": "08:00",
-        "endTime": "10:00",
-        "expectedAttendance": 60
-      },
-      "capacity": 70
-    }'
-  ```
-
-#### 5. 删除课程
-
-- **URL**: `DELETE /api/courses/{id}`
-
-- **功能**: 根据课程ID删除课程
-
-- **请求示例**:
-
-  ```bash
-  curl -X DELETE http://localhost:8080/api/courses/1
-  ```
-
-### 学生管理模块
-
-#### 1. 获取所有学生
-
-- **URL**: `GET /api/students`
-
-- **功能**: 获取系统中所有学生信息
-
-- **请求示例**:
-
-  ```bash
-  curl -X GET http://localhost:8080/api/students
-  ```
-
-#### 2. 获取单个学生
-
-- **URL**: `GET /api/students/{id}`
-
-- **功能**: 根据学生ID获取特定学生信息
-
-- **请求示例**:
-
-  ```bash
-  curl -X GET http://localhost:8080/api/students/1
-  ```
-
-#### 3. 创建学生
-
-- **URL**: `POST /api/students`
-
-- **功能**: 添加新学生到系统中
-
-- **请求示例**:
-
-  ```bash
-  curl -X POST http://localhost:8080/api/students \
-    -H "Content-Type: application/json" \
-    -d '{
-      "studentId": "S2024001",
-      "name": "张三",
-      "major": "计算机科学与技术",
-      "grade": 2024,
-      "email": "zhangsan@example.com"
-    }'
-  ```
-
-#### 4. 更新学生
-
-- **URL**: `PUT /api/students/{id}`
-
-- **功能**: 更新指定学生的信息
-
-- **请求示例**:
-
-  ```bash
-  curl -X PUT http://localhost:8080/api/students/1 \
-    -H "Content-Type: application/json" \
-    -d '{
-      "studentId": "S2024001",
-      "name": "张三丰",
-      "major": "软件工程",
-      "grade": 2024,
-      "email": "zhangsan@example.com"
-    }'
-  ```
-
-#### 5. 删除学生
-
-- **URL**: `DELETE /api/students/{id}`
-
-- **功能**: 根据学生ID删除学生
-
-- **请求示例**:
-
-  ```bash
-  curl -X DELETE http://localhost:8080/api/students/1
-  ```
-
-### 选课管理模块
-
-#### 1. 学生选课
-
-- **URL**: `POST /api/enrollments`
-
-- **功能**: 学生选择课程
-
-- **请求示例**:
-
-  ```bash
-  curl -X POST http://localhost:8080/api/enrollments \
-    -H "Content-Type: application/json" \
-    -d '{
-      "courseId": "1",
-      "studentId": "1"
-    }'
-  ```
-
-#### 2. 学生退课
-
-- **URL**: `DELETE /api/enrollments?courseId={courseId}&studentId={studentId}`
-
-- **功能**: 学生退出已选课程
-
-- **请求示例**:
-
-  ```bash
-  curl -X DELETE "http://localhost:8080/api/enrollments?courseId=1&studentId=1"
-  ```
-
-#### 3. 获取所有选课记录
-
-- **URL**: `GET /api/enrollments`
-
-- **功能**: 获取系统中所有选课记录
-
-- **请求示例**:
-
-  ```bash
-  curl -X GET http://localhost:8080/api/enrollments
-  ```
-
-#### 4. 按课程查询选课记录
-
-- **URL**: `GET /api/enrollments/course/{courseId}`
-
-- **功能**: 查询某门课程的所有选课记录
-
-- **请求示例**:
-
-  ```bash
-  curl -X GET http://localhost:8080/api/enrollments/course/1
-  ```
-
-#### 5. 按学生查询选课记录
-
-- **URL**: `GET /api/enrollments/student/{studentId}`
-
-- **功能**: 查询某个学生的所有选课记录
-
-- **请求示例**:
-
-  ```bash
-  curl -X GET http://localhost:8080/api/enrollments/student/1
-  ```
-
-### 健康检查模块
-
-#### 数据库连接检查
-
-- **URL**: `GET /health/db`
-
-- **功能**: 检查数据库连接状态
-
-- **请求示例**:
-
-  ```bash
-  curl -X GET http://localhost:8080/health/db
-  ```
+## 5. API 速查
+
+| 模块 | 操作       | 方法   | URL                                                 |
+| ---- | ---------- | ------ | --------------------------------------------------- |
+| 课程 | 查询全部   | GET    | `/api/courses`                                      |
+| 课程 | 查询单个   | GET    | `/api/courses/{id}`                                 |
+| 课程 | 新增       | POST   | `/api/courses`                                      |
+| 课程 | 更新       | PUT    | `/api/courses/{id}`                                 |
+| 课程 | 删除       | DELETE | `/api/courses/{id}`                                 |
+| 学生 | 查询全部   | GET    | `/api/students`                                     |
+| 学生 | 查询单个   | GET    | `/api/students/{id}`                                |
+| 学生 | 新增       | POST   | `/api/students`                                     |
+| 学生 | 更新       | PUT    | `/api/students/{id}`                                |
+| 学生 | 删除       | DELETE | `/api/students/{id}`                                |
+| 选课 | 查询全部   | GET    | `/api/enrollments`                                  |
+| 选课 | 按课程查询 | GET    | `/api/enrollments/course/{courseId}`                |
+| 选课 | 按学生查询 | GET    | `/api/enrollments/student/{studentId}`              |
+| 选课 | 选课       | POST   | `/api/enrollments`（Body：`courseId`、`studentId`） |
+| 选课 | 退课       | DELETE | `/api/enrollments?courseId=...&studentId=...`       |
 
 ---
 
-## 五、测试说明
+## 6. 示例请求
 
-使用 **Postman** 进行接口调试。
+创建课程：
 
-示例测试文件见：
+```http
+POST /api/courses
+Content-Type: application/json
 
-- [api-test.md](api-test.md) - 包含详细的API测试用例
-- [test-api.yaml](src/main/resources/test-api.yaml) - OpenAPI 3.0规范定义文件，可直接导入Postman
-
-### 响应格式说明
-
-系统所有API响应都遵循统一的JSON格式：
-
-```json
 {
-  "code": 200,           // 状态码
-  "message": "Success",  // 响应消息
-  "data": { }            // 实际数据
+  "code": "CS301",
+  "title": "分布式系统",
+  "instructor": {
+    "id": "T100",
+    "name": "王老师",
+    "email": "wang@example.edu.cn"
+  },
+  "schedule": {
+    "dayOfWeek": "THURSDAY",
+    "startTime": "14:00",
+    "endTime": "16:00",
+    "expectedAttendance": 60
+  },
+  "capacity": 80
 }
 ```
 
-### 错误处理
+学生选课：
 
-系统会根据不同的错误情况返回相应的HTTP状态码和错误信息：
+```http
+POST /api/enrollments
+Content-Type: application/json
 
-- `400 Bad Request`: 请求参数错误
-- `404 Not Found`: 请求的资源不存在
-- `409 Conflict`: 业务冲突（如重复选课、学号重复等）
-- `500 Internal Server Error`: 服务器内部错误
+{
+  "courseId": "课程ID",
+  "studentId": "学生ID"
+}
+```
 
-### 示例变量说明
+- 若课程已满或重复选课，`EnrollmentService` 将抛出业务异常，由全局异常处理器返回 `400` 错误。
 
-在测试文件中，以下变量需要替换为实际值：
+---
 
-| 变量名          | 示例值                               | 说明     |
-| --------------- | ------------------------------------ | -------- |
-| `{{courseId}}`  | 123e4567-e89b-12d3-a456-426614174000 | 课程 ID  |
-| `{{studentId}}` | S2025001                             | 学生学号 |
+## 7. 错误处理约定
+
+- **业务异常**（如课程已满、学号重复）：`code=400`、`HttpStatus.BAD_REQUEST`。
+- **资源不存在**：`code=404`、`ResourceNotFoundException`。
+- **参数校验失败**：`MethodArgumentNotValidException`，自动返回第一条校验信息。
+- **未知错误**：`code=500`，携带 `Internal Server Error` 提示。
+
+---
+
+## 8. 调试与测试
+
+- `api-test.md`：包含 `curl`/`HTTPie` 示例，可快速验证核心流程。
+- `src/main/resources/test-api.yaml`：OpenAPI 3.0 描述文件，可导入 Swagger UI、Apifox、Postman。
+
